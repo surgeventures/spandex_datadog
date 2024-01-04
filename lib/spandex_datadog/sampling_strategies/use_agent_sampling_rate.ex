@@ -8,6 +8,7 @@ defmodule SpandexDatadog.SamplingStrategies.UseAgentSamplingRate do
 
   We keep the current advised sampling rate in the process dictionary and use that to calculate the priority.
   """
+  require Logger
 
   alias SpandexDatadog.DatadogConstants
 
@@ -26,6 +27,15 @@ defmodule SpandexDatadog.SamplingStrategies.UseAgentSamplingRate do
       if rem(trace_id * @knuth_factor, @max_uint64) <= threshold,
         do: DatadogConstants.sampling_priority()[:AUTO_KEEP],
         else: DatadogConstants.sampling_priority()[:AUTO_REJECT]
+
+    data = %{
+      priority: priority,
+      sampling_rate_used: sampling_rate,
+      sampling_mechanism_used: DatadogConstants.sampling_mechanism_used()[:AGENT],
+      threshold: threshold
+    }
+
+    Logger.error(fn -> "kf92bf0 calculate_sampling #{inspect(data)}" end)
 
     %{
       priority: priority,
