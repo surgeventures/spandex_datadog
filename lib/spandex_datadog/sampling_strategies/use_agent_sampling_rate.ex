@@ -7,6 +7,10 @@ defmodule SpandexDatadog.SamplingStrategies.UseAgentSamplingRate do
   The tracing library is then able to use these rates to set the priority of the trace.
 
   We keep the current advised sampling rate in the process dictionary and use that to calculate the priority.
+
+  This strategy is WIP. There are issues with saving sampling rates received from the agent, here:
+  lib/spandex_datadog/api_server.ex. For some reason, payload type is not detected as JSON and the
+  parsed body is a string, not a map.
   """
 
   alias SpandexDatadog.DatadogConstants
