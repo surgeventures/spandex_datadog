@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.2](https://github.com/surgeventures/spandex_datadog/compare/v1.6.1...v1.6.2) (2024-06-02)
+
+## Bug Fixes
+* Handling errors when saving agent sampling rates to avoid crashing by @JerzyDziala, @Artur-Sulej in https://github.com/surgeventures/spandex_datadog/pull/10
+
 ## [1.6.1](https://github.com/surgeventures/spandex_datadog/compare/v1.6.0...v1.6.1) (2024-01-25)
 
 ## Bug Fixes
