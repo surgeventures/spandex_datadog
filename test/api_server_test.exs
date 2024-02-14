@@ -357,7 +357,7 @@ defmodule SpandexDatadog.ApiServerTest do
         {:ok, %Req.Response{status: 200, body: "i am not what you expected"}}
       end)
 
-      ApiServer.start_link(batch_size: 1, asynchronous_send?: false)
+      ApiServer.start_link(batch_size: 1, asynchronous_send?: false, verbose?: true)
 
       log =
         capture_log(fn ->

@@ -208,10 +208,15 @@ defmodule SpandexDatadog.ApiServer do
           end)
 
         resp ->
-          Logger.error(fn -> "non-200 response when sending traces: #{inspect(resp)}" end)
+          if verbose? do
+            Logger.error(fn -> "non-200 response when sending traces: #{inspect(resp)}" end)
+          end
       end
     rescue
-      e -> Logger.error(fn -> "Failed to update the sampling rates: #{inspect(e)}" end)
+      e ->
+        if verbose? do
+          Logger.error(fn -> "Failed to update the sampling rates: #{inspect(e)}" end)
+        end
     end
 
     if verbose? do
