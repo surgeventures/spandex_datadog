@@ -4,7 +4,8 @@ defmodule SpandexDatadog.AgentHttpClient.Impl do
       body: body,
       headers: headers,
       retry: :transient,
-      retry_delay: &retry_delay/1
+      retry_delay: &retry_delay/1,
+      retry_log_level: false
     )
   end
 
