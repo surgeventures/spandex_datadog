@@ -1,6 +1,11 @@
 # Changelog
 
-## [1.6.2](https://github.com/surgeventures/spandex_datadog/compare/v1.6.1...v1.6.2) (2024-06-02)
+## [1.6.3](https://github.com/surgeventures/spandex_datadog/compare/v1.6.2...v1.6.3) (2024-02-14)
+
+## Bug Fixes
+* More logs controlled by verbose? flag by @Artur-Sulej in https://github.com/surgeventures/spandex_datadog/pull/11
+
+## [1.6.2](https://github.com/surgeventures/spandex_datadog/compare/v1.6.1...v1.6.2) (2024-02-06)
 
 ## Bug Fixes
 * Handling errors when saving agent sampling rates to avoid crashing by @JerzyDziala, @Artur-Sulej in https://github.com/surgeventures/spandex_datadog/pull/10
