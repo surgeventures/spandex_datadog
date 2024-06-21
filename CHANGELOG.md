@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.6.4](https://github.com/surgeventures/spandex_datadog/compare/v1.6.3...v1.6.4) (2024-06-21)
+
+* Update `req` version from ~0.4 to ~0.5
+
 ## [1.6.3](https://github.com/surgeventures/spandex_datadog/compare/v1.6.2...v1.6.3) (2024-02-14)
 
 ## Bug Fixes
