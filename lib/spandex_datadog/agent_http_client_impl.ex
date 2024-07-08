@@ -3,14 +3,12 @@ defmodule SpandexDatadog.AgentHttpClient.Impl do
     Req.put("http://#{host}:#{port}/v0.4/traces",
       body: body,
       headers: headers,
-      retry: :transient,
-      retry_delay: &retry_delay/1,
-      retry_log_level: false
+      retry: false,
+      connect_options: [
+        timeout: 200
+      ],
+      pool_timeout: 200,
+      receive_timeout: 200
     )
-  end
-
-  defp retry_delay(attempt) do
-    # 3 retries with 10% jitter, example delays: 484ms, 945ms, 1908ms
-    trunc(Integer.pow(2, attempt) * 500 * (1 - 0.1 * :rand.uniform()))
   end
 end
