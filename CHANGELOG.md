@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.6.5](https://github.com/surgeventures/spandex_datadog/compate/v1.6.4...v1.6.5) (2024-07-09)
+
+* Disable retries, lower timeouts on trace submission request
+
 ## [1.6.4](https://github.com/surgeventures/spandex_datadog/compare/v1.6.3...v1.6.4) (2024-06-21)
 
 * Update `req` version from ~0.4 to ~0.5
