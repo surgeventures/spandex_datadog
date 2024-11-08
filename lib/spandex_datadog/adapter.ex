@@ -13,6 +13,7 @@ defmodule SpandexDatadog.Adapter do
   }
 
   @max_id 9_223_372_036_854_775_807
+  @default_priority 1
 
   @impl Spandex.Adapter
   def trace_id(), do: :rand.uniform(@max_id)
@@ -37,14 +38,11 @@ defmodule SpandexDatadog.Adapter do
           {:ok, SpanContext.t()}
           | {:error, :no_distributed_trace}
   def distributed_context(%Plug.Conn{} = conn, _opts) do
-    trace_id = get_first_header(conn, "x-datadog-trace-id")
-    parent_id = get_first_header(conn, "x-datadog-parent-id")
-    priority = get_first_header(conn, "x-datadog-sampling-priority") || 1
+    context = context_from_w3c_headers(conn) || context_from_datadog_headers(conn)
 
-    if is_nil(trace_id) || is_nil(parent_id) do
-      {:error, :no_distributed_trace}
-    else
-      {:ok, %SpanContext{trace_id: trace_id, parent_id: parent_id, priority: priority}}
+    case context do
+      nil -> {:error, :no_distributed_trace}
+      context -> {:ok, context}
     end
   end
 
@@ -53,15 +51,96 @@ defmodule SpandexDatadog.Adapter do
           {:ok, SpanContext.t()}
           | {:error, :no_distributed_trace}
   def distributed_context(headers, _opts) do
-    trace_id = get_header(headers, "x-datadog-trace-id")
-    parent_id = get_header(headers, "x-datadog-parent-id")
-    priority = get_header(headers, "x-datadog-sampling-priority") || 1
+    context = context_from_w3c_headers(headers) || context_from_datadog_headers(headers)
 
-    if is_nil(trace_id) || is_nil(parent_id) do
-      {:error, :no_distributed_trace}
-    else
-      {:ok, %SpanContext{trace_id: trace_id, parent_id: parent_id, priority: priority}}
+    case context do
+      nil -> {:error, :no_distributed_trace}
+      context -> {:ok, context}
     end
+  end
+
+  defp context_from_datadog_headers(%Plug.Conn{} = conn) do
+    trace_id = get_first_header(conn, "x-datadog-trace-id") |> parse_datadog_header()
+    parent_id = get_first_header(conn, "x-datadog-parent-id") |> parse_datadog_header()
+    priority = get_first_header(conn, "x-datadog-sampling-priority") |> parse_datadog_header() || @default_priority
+
+    if trace_id && parent_id do
+      %SpanContext{trace_id: trace_id, parent_id: parent_id, priority: priority}
+    end
+  end
+
+  defp context_from_datadog_headers(headers) do
+    trace_id = get_header(headers, "x-datadog-trace-id") |> parse_datadog_header()
+    parent_id = get_header(headers, "x-datadog-parent-id") |> parse_datadog_header()
+    priority = get_header(headers, "x-datadog-sampling-priority") |> parse_datadog_header() || @default_priority
+
+    if trace_id && parent_id do
+      %SpanContext{trace_id: trace_id, parent_id: parent_id, priority: priority}
+    end
+  end
+
+  defp context_from_w3c_headers(%Plug.Conn{} = conn) do
+    traceparent = get_first_header(conn, "traceparent")
+    tracestate = get_first_header(conn, "tracestate")
+    context_from_w3c_headers(traceparent, tracestate)
+  end
+
+  defp context_from_w3c_headers(headers) do
+    traceparent = get_header(headers, "traceparent")
+    tracestate = get_header(headers, "tracestate")
+    context_from_w3c_headers(traceparent, tracestate)
+  end
+
+  defp context_from_w3c_headers(nil, _), do: nil
+
+  defp context_from_w3c_headers(traceparent, tracestate) do
+    [_version, trace_id, parent_id, _flags] = String.split(traceparent, "-")
+    trace_id = decode_w3c_trace_id(trace_id)
+    parent_id = decode_w3c_parent_id(parent_id)
+    priority = w3c_priority(tracestate)
+    %SpanContext{trace_id: trace_id, parent_id: parent_id, priority: priority}
+  rescue
+    e ->
+      Logger.error(
+        "Failed to parse W3C headers, traceparent: #{inspect(traceparent)}, tracestate: #{inspect(tracestate)}, error: #{inspect(e)}"
+      )
+
+      nil
+  end
+
+  defp decode_w3c_trace_id(hex_string) do
+    <<id::128>> = Base.decode16!(hex_string, case: :lower)
+    id
+  end
+
+  defp decode_w3c_parent_id(hex_string) do
+    <<id::64>> = Base.decode16!(hex_string, case: :lower)
+    id
+  end
+
+  defp w3c_priority(nil = _tracestate), do: @default_priority
+
+  defp w3c_priority(tracestate) do
+    tracestate
+    |> String.split(",")
+    |> Enum.find_value(fn vendor_state ->
+      case vendor_state do
+        "dd=" <> value -> value
+        _ -> nil
+      end
+    end)
+    |> String.split(";")
+    |> Enum.find_value(fn param ->
+      case param do
+        "s:" <> value -> value
+        _ -> nil
+      end
+    end)
+    |> String.to_integer()
+  rescue
+    e ->
+      Logger.error("Failed to parse W3C priority, tracestate: #{inspect(tracestate)}, error: #{inspect(e)}")
+      @default_priority
   end
 
   @impl Spandex.Adapter
@@ -95,29 +174,26 @@ defmodule SpandexDatadog.Adapter do
     conn
     |> Plug.Conn.get_req_header(header_name)
     |> List.first()
-    |> parse_header()
   end
 
   @spec get_header(%{}, String.t()) :: integer() | nil
   defp get_header(headers, key) when is_map(headers) do
     Map.get(headers, key, nil)
-    |> parse_header()
   end
 
   @spec get_header([], String.t()) :: integer() | nil
   defp get_header(headers, key) when is_list(headers) do
     Enum.find_value(headers, fn {k, v} -> if k == key, do: v end)
-    |> parse_header()
   end
 
-  defp parse_header(header) when is_bitstring(header) do
+  defp parse_datadog_header(header) when is_bitstring(header) do
     case Integer.parse(header) do
       {int, _} -> int
       _ -> nil
     end
   end
 
-  defp parse_header(_header), do: nil
+  defp parse_datadog_header(_header), do: nil
 
   defp tracing_headers(%SpanContext{trace_id: trace_id, parent_id: parent_id, priority: priority}) do
     [
