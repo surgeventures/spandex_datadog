@@ -53,7 +53,7 @@ defmodule SpandexDatadog.Test.AdapterTest do
     assert(Util.find_span("trace_one_thing/0").span_id == Util.find_span("do_one_thing/0").parent_id)
   end
 
-  test "a span is correctly notated as an error if an excepton occurs" do
+  test "a span is correctly notated as an error if an exception occurs" do
     Util.can_fail(fn -> TracedModule.trace_one_error() end)
 
     assert(Util.find_span("trace_one_error/0").error == 1)
@@ -74,7 +74,7 @@ defmodule SpandexDatadog.Test.AdapterTest do
     assert(Util.find_span("error_one_deep/0", 1).error == 1)
   end
 
-  describe "distributed_context/2 with Plug.Conn" do
+  describe "distributed_context/2 with Plug.Conn and DD headers" do
     test "returns a SpanContext struct" do
       conn =
         :get
@@ -98,14 +98,53 @@ defmodule SpandexDatadog.Test.AdapterTest do
 
       assert {:ok, %SpanContext{priority: 1}} = Adapter.distributed_context(conn, [])
     end
+  end
 
-    test "returns an error when it cannot detect both a Trace ID and a Span ID" do
-      conn = Plug.Test.conn(:get, "/")
+  describe "distributed_context/2 with Plug.Conn and W3C headers" do
+    test "returns a SpanContext struct" do
+      conn =
+        :get
+        |> Plug.Test.conn("/")
+        |> Plug.Conn.put_req_header("traceparent", "00-672ce69300000000d2af5a72993ea4b4-d2af5a72993ea4b4-00")
+        |> Plug.Conn.put_req_header("tracestate", "dd=s:2;t.dm:-0;p:26251d1e51321aa0")
+
+      assert {:ok, %SpanContext{} = span_context} = Adapter.distributed_context(conn, [])
+      assert span_context.trace_id == 137_143_621_228_370_596_820_984_055_483_250_681_012
+      assert span_context.parent_id == 15_181_452_317_133_022_388
+      assert span_context.priority == 2
+      {encoded_trace_id, encoded_parent_id} = encode_w3c(span_context)
+      assert encoded_trace_id == "672ce69300000000d2af5a72993ea4b4"
+      assert encoded_parent_id == "d2af5a72993ea4b4"
+    end
+
+    test "priority defaults to 1 when no tracestate" do
+      conn =
+        :get
+        |> Plug.Test.conn("/")
+        |> Plug.Conn.put_req_header("traceparent", "00-0000000000000000160bc62487e24d01-3702f1bcf6862126-01")
+
+      assert {:ok, %SpanContext{priority: 1}} = Adapter.distributed_context(conn, [])
+      assert {:ok, %SpanContext{} = span_context} = Adapter.distributed_context(conn, [])
+      assert span_context.trace_id == 1_588_581_153_779_109_121
+      assert span_context.parent_id == 3_963_996_415_931_588_902
+      assert span_context.priority == 1
+      {encoded_trace_id, encoded_parent_id} = encode_w3c(span_context)
+      assert encoded_trace_id == "0000000000000000160bc62487e24d01"
+      assert encoded_parent_id == "3702f1bcf6862126"
+    end
+
+    test "returns an error when it cannot parse traceparent" do
+      conn =
+        :get
+        |> Plug.Test.conn("/")
+        |> Plug.Conn.put_req_header("traceparent", "incorrectformat")
+        |> Plug.Conn.put_req_header("tracestate", "incorrectformat")
+
       assert {:error, :no_distributed_trace} = Adapter.distributed_context(conn, [])
     end
   end
 
-  describe "distributed_context/2 with Spandex.headers()" do
+  describe "distributed_context/2 with Spandex.headers() and DD headers" do
     test "returns a SpanContext struct when headers is a list" do
       headers = [{"x-datadog-trace-id", "123"}, {"x-datadog-parent-id", "456"}, {"x-datadog-sampling-priority", "2"}]
 
@@ -139,8 +178,58 @@ defmodule SpandexDatadog.Test.AdapterTest do
 
       assert {:ok, %SpanContext{priority: 1}} = Adapter.distributed_context(headers, [])
     end
+  end
 
-    test "returns an error when it cannot detect both a Trace ID and a Span ID" do
+  describe "distributed_context/2 with Spandex.headers() and W3C headers" do
+    test "returns a SpanContext struct when headers is a list" do
+      headers = [
+        {"traceparent", "00-672ce69300000000d2af5a72993ea4b4-d2af5a72993ea4b4-00"},
+        {"tracestate", "dd=s:2;t.dm:-0;p:26251d1e51321aa0"}
+      ]
+
+      assert {:ok, %SpanContext{} = span_context} = Adapter.distributed_context(headers, [])
+      assert span_context.trace_id == 137_143_621_228_370_596_820_984_055_483_250_681_012
+      assert span_context.parent_id == 15_181_452_317_133_022_388
+      assert span_context.priority == 2
+      {encoded_trace_id, encoded_parent_id} = encode_w3c(span_context)
+      assert encoded_trace_id == "672ce69300000000d2af5a72993ea4b4"
+      assert encoded_parent_id == "d2af5a72993ea4b4"
+    end
+
+    test "returns a SpanContext struct when headers is a map" do
+      headers = %{
+        "traceparent" => "00-672ce69300000000d2af5a72993ea4b4-d2af5a72993ea4b4-00",
+        "tracestate" => "dd=s:2;t.dm:-0;p:26251d1e51321aa0"
+      }
+
+      assert {:ok, %SpanContext{} = span_context} = Adapter.distributed_context(headers, [])
+      assert span_context.trace_id == 137_143_621_228_370_596_820_984_055_483_250_681_012
+      assert span_context.parent_id == 15_181_452_317_133_022_388
+      assert span_context.priority == 2
+      {encoded_trace_id, encoded_parent_id} = encode_w3c(span_context)
+      assert encoded_trace_id == "672ce69300000000d2af5a72993ea4b4"
+      assert encoded_parent_id == "d2af5a72993ea4b4"
+    end
+
+    # for traces that are not explicitly started but rather are continued from a distributed context
+    # we rather default to a priority of 1. because the real reason for the lack of sampling is in the upstream
+    # and a default like that is both safer and makes it noticeable that the configuration might be wrong
+    test "priority defaults to 1" do
+      headers = %{
+        "traceparent" => "00-672ce69300000000d2af5a72993ea4b4-d2af5a72993ea4b4-00"
+      }
+
+      assert {:ok, %SpanContext{priority: 1}} = Adapter.distributed_context(headers, [])
+    end
+  end
+
+  describe "distributed_context/2 without headers present" do
+    test "returns an error when Plug.Conn headers are empty" do
+      conn = Plug.Test.conn(:get, "/")
+      assert {:error, :no_distributed_trace} = Adapter.distributed_context(conn, [])
+    end
+
+    test "returns an error when Spandex.headers() are empty" do
       headers = %{}
       assert {:error, :no_distributed_trace} = Adapter.distributed_context(headers, [])
     end
@@ -176,5 +265,11 @@ defmodule SpandexDatadog.Test.AdapterTest do
                "header2" => "value2"
              }
     end
+  end
+
+  defp encode_w3c(span_context) do
+    encoded_trace_id = Base.encode16(<<span_context.trace_id::128>>, case: :lower)
+    encoded_parent_id = Base.encode16(<<span_context.parent_id::64>>, case: :lower)
+    {encoded_trace_id, encoded_parent_id}
   end
 end
