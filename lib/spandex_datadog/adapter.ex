@@ -34,38 +34,14 @@ defmodule SpandexDatadog.Adapter do
   Fetches the Datadog-specific conn request headers if they are present.
   """
   @impl Spandex.Adapter
-  @spec distributed_context(conn :: Plug.Conn.t(), Tracer.opts()) ::
-          {:ok, SpanContext.t()}
-          | {:error, :no_distributed_trace}
-  def distributed_context(%Plug.Conn{} = conn, _opts) do
-    context = context_from_w3c_headers(conn) || context_from_datadog_headers(conn)
-
-    case context do
-      nil -> {:error, :no_distributed_trace}
-      context -> {:ok, context}
-    end
-  end
-
-  @impl Spandex.Adapter
-  @spec distributed_context(headers :: Spandex.headers(), Tracer.opts()) ::
-          {:ok, SpanContext.t()}
-          | {:error, :no_distributed_trace}
+  @spec distributed_context(headers :: Plug.Conn.t() | Spandex.headers(), Tracer.opts()) ::
+          {:ok, SpanContext.t()} | {:error, :no_distributed_trace}
   def distributed_context(headers, _opts) do
     context = context_from_w3c_headers(headers) || context_from_datadog_headers(headers)
 
     case context do
       nil -> {:error, :no_distributed_trace}
       context -> {:ok, context}
-    end
-  end
-
-  defp context_from_datadog_headers(%Plug.Conn{} = conn) do
-    trace_id = get_first_header(conn, "x-datadog-trace-id") |> parse_datadog_header()
-    parent_id = get_first_header(conn, "x-datadog-parent-id") |> parse_datadog_header()
-    priority = get_first_header(conn, "x-datadog-sampling-priority") |> parse_datadog_header() || @default_priority
-
-    if trace_id && parent_id do
-      %SpanContext{trace_id: trace_id, parent_id: parent_id, priority: priority}
     end
   end
 
@@ -77,12 +53,6 @@ defmodule SpandexDatadog.Adapter do
     if trace_id && parent_id do
       %SpanContext{trace_id: trace_id, parent_id: parent_id, priority: priority}
     end
-  end
-
-  defp context_from_w3c_headers(%Plug.Conn{} = conn) do
-    traceparent = get_first_header(conn, "traceparent")
-    tracestate = get_first_header(conn, "tracestate")
-    context_from_w3c_headers(traceparent, tracestate)
   end
 
   defp context_from_w3c_headers(headers) do
@@ -169,10 +139,10 @@ defmodule SpandexDatadog.Adapter do
 
   # Private Helpers
 
-  @spec get_first_header(Plug.Conn.t(), String.t()) :: integer() | nil
-  defp get_first_header(conn, header_name) do
+  @spec get_header(Plug.Conn.t(), String.t()) :: integer() | nil
+  defp get_header(%Plug.Conn{} = conn, key) do
     conn
-    |> Plug.Conn.get_req_header(header_name)
+    |> Plug.Conn.get_req_header(key)
     |> List.first()
   end
 
