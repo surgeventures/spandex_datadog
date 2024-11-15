@@ -14,7 +14,9 @@ defmodule SpandexDatadog.ApiServer do
   alias SpandexDatadog.AgentHttpClient
 
   defmodule State do
-    @moduledoc false
+    @moduledoc """
+    State struct for the ApiServer.
+    """
 
     @type t :: %State{}
 
