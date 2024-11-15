@@ -1,6 +1,14 @@
 # Changelog
 
-## [1.6.5](https://github.com/surgeventures/spandex_datadog/compate/v1.6.4...v1.6.5) (2024-07-09)
+## [1.6.6](https://github.com/surgeventures/spandex_datadog/compare/v1.6.5...v1.6.6) (2024-11-15)
+
+## Features
+
+* Added extraction of trace context from W3C headers (traceparent, tracestate), making the library
+  compatible with OpenTelemetry while maintaining OpenTracing support @Artur-Sulej
+  in https://github.com/surgeventures/spandex_datadog/pull/15
+
+## [1.6.5](https://github.com/surgeventures/spandex_datadog/compare/v1.6.4...v1.6.5) (2024-07-09)
 
 * Disable retries, lower timeouts on trace submission request
 
