@@ -65,8 +65,8 @@ defmodule SpandexDatadog.Adapter do
 
   defp context_from_w3c_headers(traceparent, tracestate) do
     [_version, trace_id, parent_id, _flags] = String.split(traceparent, "-")
-    trace_id = decode_w3c_trace_id(trace_id)
-    parent_id = decode_w3c_parent_id(parent_id)
+    trace_id = decode_w3c_id(trace_id)
+    parent_id = decode_w3c_id(parent_id)
     priority = w3c_priority(tracestate)
     %SpanContext{trace_id: trace_id, parent_id: parent_id, priority: priority}
   rescue
@@ -78,14 +78,12 @@ defmodule SpandexDatadog.Adapter do
       nil
   end
 
-  defp decode_w3c_trace_id(hex_string) do
-    <<id::128>> = Base.decode16!(hex_string, case: :lower)
-    id
-  end
-
-  defp decode_w3c_parent_id(hex_string) do
-    <<id::64>> = Base.decode16!(hex_string, case: :lower)
-    id
+  defp decode_w3c_id(hex_string) do
+    # Truncate 128-bit trace ID to last 64 bits as Datadog only uses lower 64 bits for trace correlation.
+    # https://docs.datadoghq.com/opentelemetry/interoperability/otel_api_tracing_interoperability/#128-bit-trace-ids
+    hex_string
+    |> String.slice(-16, 16)
+    |> String.to_integer(16)
   end
 
   defp w3c_priority(nil = _tracestate), do: @default_priority
