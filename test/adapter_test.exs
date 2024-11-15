@@ -105,16 +105,15 @@ defmodule SpandexDatadog.Test.AdapterTest do
       conn =
         :get
         |> Plug.Test.conn("/")
-        |> Plug.Conn.put_req_header("traceparent", "00-672ce69300000000d2af5a72993ea4b4-d2af5a72993ea4b4-00")
+        |> Plug.Conn.put_req_header("traceparent", "00-672ce69300000000d2af5a72993ea4b4-b7ad6b7169203331-00")
         |> Plug.Conn.put_req_header("tracestate", "dd=s:2;t.dm:-0;p:26251d1e51321aa0")
 
       assert {:ok, %SpanContext{} = span_context} = Adapter.distributed_context(conn, [])
-      assert span_context.trace_id == 137_143_621_228_370_596_820_984_055_483_250_681_012
-      assert span_context.parent_id == 15_181_452_317_133_022_388
+      assert span_context.trace_id == 15_181_452_317_133_022_388
+      assert span_context.parent_id == 13_235_353_014_750_950_193
       assert span_context.priority == 2
-      {encoded_trace_id, encoded_parent_id} = encode_w3c(span_context)
-      assert encoded_trace_id == "672ce69300000000d2af5a72993ea4b4"
-      assert encoded_parent_id == "d2af5a72993ea4b4"
+      assert encode_w3c_id(span_context.trace_id) == "d2af5a72993ea4b4"
+      assert encode_w3c_id(span_context.parent_id) == "b7ad6b7169203331"
     end
 
     test "priority defaults to 1 when no tracestate" do
@@ -128,9 +127,8 @@ defmodule SpandexDatadog.Test.AdapterTest do
       assert span_context.trace_id == 1_588_581_153_779_109_121
       assert span_context.parent_id == 3_963_996_415_931_588_902
       assert span_context.priority == 1
-      {encoded_trace_id, encoded_parent_id} = encode_w3c(span_context)
-      assert encoded_trace_id == "0000000000000000160bc62487e24d01"
-      assert encoded_parent_id == "3702f1bcf6862126"
+      assert encode_w3c_id(span_context.trace_id) == "160bc62487e24d01"
+      assert encode_w3c_id(span_context.parent_id) == "3702f1bcf6862126"
     end
 
     test "returns an error when it cannot parse traceparent" do
@@ -183,32 +181,30 @@ defmodule SpandexDatadog.Test.AdapterTest do
   describe "distributed_context/2 with Spandex.headers() and W3C headers" do
     test "returns a SpanContext struct when headers is a list" do
       headers = [
-        {"traceparent", "00-672ce69300000000d2af5a72993ea4b4-d2af5a72993ea4b4-00"},
+        {"traceparent", "00-672ce69300000000d2af5a72993ea4b4-b7ad6b7169203331-00"},
         {"tracestate", "dd=s:2;t.dm:-0;p:26251d1e51321aa0"}
       ]
 
       assert {:ok, %SpanContext{} = span_context} = Adapter.distributed_context(headers, [])
-      assert span_context.trace_id == 137_143_621_228_370_596_820_984_055_483_250_681_012
-      assert span_context.parent_id == 15_181_452_317_133_022_388
+      assert span_context.trace_id == 15_181_452_317_133_022_388
+      assert span_context.parent_id == 13_235_353_014_750_950_193
       assert span_context.priority == 2
-      {encoded_trace_id, encoded_parent_id} = encode_w3c(span_context)
-      assert encoded_trace_id == "672ce69300000000d2af5a72993ea4b4"
-      assert encoded_parent_id == "d2af5a72993ea4b4"
+      assert encode_w3c_id(span_context.trace_id) == "d2af5a72993ea4b4"
+      assert encode_w3c_id(span_context.parent_id) == "b7ad6b7169203331"
     end
 
     test "returns a SpanContext struct when headers is a map" do
       headers = %{
-        "traceparent" => "00-672ce69300000000d2af5a72993ea4b4-d2af5a72993ea4b4-00",
+        "traceparent" => "00-672ce69300000000d2af5a72993ea4b4-b7ad6b7169203331-00",
         "tracestate" => "dd=s:2;t.dm:-0;p:26251d1e51321aa0"
       }
 
       assert {:ok, %SpanContext{} = span_context} = Adapter.distributed_context(headers, [])
-      assert span_context.trace_id == 137_143_621_228_370_596_820_984_055_483_250_681_012
-      assert span_context.parent_id == 15_181_452_317_133_022_388
+      assert span_context.trace_id == 15_181_452_317_133_022_388
+      assert span_context.parent_id == 13_235_353_014_750_950_193
       assert span_context.priority == 2
-      {encoded_trace_id, encoded_parent_id} = encode_w3c(span_context)
-      assert encoded_trace_id == "672ce69300000000d2af5a72993ea4b4"
-      assert encoded_parent_id == "d2af5a72993ea4b4"
+      assert encode_w3c_id(span_context.trace_id) == "d2af5a72993ea4b4"
+      assert encode_w3c_id(span_context.parent_id) == "b7ad6b7169203331"
     end
 
     # for traces that are not explicitly started but rather are continued from a distributed context
@@ -216,7 +212,7 @@ defmodule SpandexDatadog.Test.AdapterTest do
     # and a default like that is both safer and makes it noticeable that the configuration might be wrong
     test "priority defaults to 1" do
       headers = %{
-        "traceparent" => "00-672ce69300000000d2af5a72993ea4b4-d2af5a72993ea4b4-00"
+        "traceparent" => "00-672ce69300000000d2af5a72993ea4b4-b7ad6b7169203331-00"
       }
 
       assert {:ok, %SpanContext{priority: 1}} = Adapter.distributed_context(headers, [])
@@ -267,9 +263,7 @@ defmodule SpandexDatadog.Test.AdapterTest do
     end
   end
 
-  defp encode_w3c(span_context) do
-    encoded_trace_id = Base.encode16(<<span_context.trace_id::128>>, case: :lower)
-    encoded_parent_id = Base.encode16(<<span_context.parent_id::64>>, case: :lower)
-    {encoded_trace_id, encoded_parent_id}
+  defp encode_w3c_id(id) do
+    Base.encode16(<<id::64>>, case: :lower)
   end
 end
