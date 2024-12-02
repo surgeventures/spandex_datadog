@@ -90,7 +90,7 @@ defmodule SpandexDatadog.Adapter do
 
   defp w3c_priority(tracestate) do
     tracestate
-    |> String.split(",")
+    |> String.split(~r/[ \t]*+,[ \t]*+/)
     |> Enum.find_value(fn vendor_state ->
       case vendor_state do
         "dd=" <> value -> value
