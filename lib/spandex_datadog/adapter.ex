@@ -46,9 +46,9 @@ defmodule SpandexDatadog.Adapter do
   end
 
   defp context_from_datadog_headers(headers) do
-    trace_id = get_header(headers, "x-datadog-trace-id") |> parse_datadog_header()
-    parent_id = get_header(headers, "x-datadog-parent-id") |> parse_datadog_header()
-    priority = get_header(headers, "x-datadog-sampling-priority") |> parse_datadog_header() || @default_priority
+    trace_id = get_header(headers, "x-datadog-trace-id") |> parse_integer()
+    parent_id = get_header(headers, "x-datadog-parent-id") |> parse_integer()
+    priority = get_header(headers, "x-datadog-sampling-priority") |> parse_integer() || @default_priority
 
     if trace_id && parent_id do
       %SpanContext{trace_id: trace_id, parent_id: parent_id, priority: priority}
@@ -89,26 +89,34 @@ defmodule SpandexDatadog.Adapter do
   defp w3c_priority(nil = _tracestate), do: @default_priority
 
   defp w3c_priority(tracestate) do
-    tracestate
-    |> String.split(~r/[ \t]*+,[ \t]*+/)
-    |> Enum.find_value(fn vendor_state ->
-      case vendor_state do
-        "dd=" <> value -> value
-        _ -> nil
+    with vendors <- String.split(tracestate, ~r/[ \t]*+,[ \t]*+/),
+         {:ok, dd_tracestate} <-
+           Enum.find_value(vendors, {:error, :dd_tracestate_not_found}, fn
+             "dd=" <> value -> {:ok, value}
+             _ -> nil
+           end),
+         dd_fields <- extract_datadog_fields(dd_tracestate) do
+      Map.get(dd_fields, "s")
+      |> case do
+        nil ->
+          @default_priority
+
+        value ->
+          parse_integer(value) ||
+            (Logger.error("Failed to parse W3C priority, tracestate: #{inspect(tracestate)}}") && @default_priority)
       end
-    end)
+    else
+      {:error, :dd_tracestate_not_found} -> @default_priority
+    end
+  end
+
+  def extract_datadog_fields(dd_tracestate) do
+    dd_tracestate
     |> String.split(";")
-    |> Enum.find_value(fn param ->
-      case param do
-        "s:" <> value -> value
-        _ -> nil
-      end
+    |> Enum.reduce(%{}, fn pair, acc ->
+      [key, value] = String.split(pair, ":", parts: 2)
+      Map.put(acc, key, value)
     end)
-    |> String.to_integer()
-  rescue
-    e ->
-      Logger.error("Failed to parse W3C priority, tracestate: #{inspect(tracestate)}, error: #{inspect(e)}")
-      @default_priority
   end
 
   @impl Spandex.Adapter
@@ -154,14 +162,14 @@ defmodule SpandexDatadog.Adapter do
     Enum.find_value(headers, fn {k, v} -> if k == key, do: v end)
   end
 
-  defp parse_datadog_header(header) when is_bitstring(header) do
-    case Integer.parse(header) do
+  defp parse_integer(value) when is_bitstring(value) do
+    case Integer.parse(value) do
       {int, _} -> int
       _ -> nil
     end
   end
 
-  defp parse_datadog_header(_header), do: nil
+  defp parse_integer(_value), do: nil
 
   defp tracing_headers(%SpanContext{trace_id: trace_id, parent_id: parent_id, priority: priority}) do
     [

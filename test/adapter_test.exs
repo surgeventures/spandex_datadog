@@ -131,6 +131,22 @@ defmodule SpandexDatadog.Test.AdapterTest do
       assert encode_w3c_id(span_context.parent_id) == "3702f1bcf6862126"
     end
 
+    test "priority defaults to 1 when no priority param in tracestate" do
+      conn =
+        :get
+        |> Plug.Test.conn("/")
+        |> Plug.Conn.put_req_header("traceparent", "00-0000000000000000160bc62487e24d01-3702f1bcf6862126-01")
+        |> Plug.Conn.put_req_header("tracestate", "dd=t.dm:-0;p:121bcd413432")
+
+      assert {:ok, %SpanContext{priority: 1}} = Adapter.distributed_context(conn, [])
+      assert {:ok, %SpanContext{} = span_context} = Adapter.distributed_context(conn, [])
+      assert span_context.trace_id == 1_588_581_153_779_109_121
+      assert span_context.parent_id == 3_963_996_415_931_588_902
+      assert span_context.priority == 1
+      assert encode_w3c_id(span_context.trace_id) == "160bc62487e24d01"
+      assert encode_w3c_id(span_context.parent_id) == "3702f1bcf6862126"
+    end
+
     test "returns an error when it cannot parse traceparent" do
       conn =
         :get
