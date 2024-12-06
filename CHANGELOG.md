@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.7](https://github.com/surgeventures/spandex_datadog/compare/v1.6.6...v1.6.7) (2024-12-06)
+
+## Features
+
+* Removed redundant error log when there's no priority param in tracestate. Error is only logged
+  when parsing priority param fails @Artur-Sulej
+* Improved regex for splitting tracestate @Artur-Sulej
+  in https://github.com/surgeventures/spandex_datadog/pull/16
+
 ## [1.6.6](https://github.com/surgeventures/spandex_datadog/compare/v1.6.5...v1.6.6) (2024-11-15)
 
 ## Features
