@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/surgeventures/spandex_datadog/compare/v1.6.7...v1.7.0) (2025-09-23)
+
+## Features
+
+* Fallback to cgroup inode when cannot obtain container_id from cgroup, as container_id might not
+  be present when using cgroup v2.
+
 ## [1.6.7](https://github.com/surgeventures/spandex_datadog/compare/v1.6.6...v1.6.7) (2024-12-06)
 
 ## Features

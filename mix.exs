@@ -2,7 +2,7 @@ defmodule SpandexDatadog.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/surgeventures/spandex_datadog"
-  @version "1.6.7"
+  @version "1.7.0"
 
   def project do
     [
