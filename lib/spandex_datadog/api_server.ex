@@ -31,6 +31,7 @@ defmodule SpandexDatadog.ApiServer do
       :sync_threshold,
       :agent_pid,
       :container_id,
+      :cgroup_inode,
       :trap_exits?
     ]
   end
@@ -102,7 +103,8 @@ defmodule SpandexDatadog.ApiServer do
       sync_threshold: opts[:sync_threshold],
       asynchronous_send?: opts[:asynchronous_send?],
       agent_pid: agent_pid,
-      container_id: get_container_id()
+      container_id: get_container_id(),
+      cgroup_inode: get_cgroup_inode()
     }
 
     {:ok, state}
@@ -112,11 +114,23 @@ defmodule SpandexDatadog.ApiServer do
   @cgroup_ctnr "[0-9a-f]{64}"
   @cgroup_task "[0-9a-f]{32}-\\d+"
   @cgroup_regex Regex.compile!(".*(#{@cgroup_uuid}|#{@cgroup_ctnr}|#{@cgroup_task})(?:\\.scope)?$", "m")
+  @cgroup_path_regexp Regex.compile!("^\\d+:[^:]*:(.+)$", "m")
 
   defp get_container_id() do
     with {:ok, file_binary} <- File.read("/proc/self/cgroup"),
          [_, container_id] <- Regex.run(@cgroup_regex, file_binary) do
       container_id
+    else
+      _ -> nil
+    end
+  end
+
+  defp get_cgroup_inode() do
+    with {:ok, file_binary} <- File.read("/proc/self/cgroup"),
+         [_, relative_fs_cgroup_path] <- Regex.run(@cgroup_path_regexp, file_binary),
+         absolute_fs_cgroup_path <- "/sys/fs/cgroup/#{String.trim(relative_fs_cgroup_path, "/")}",
+         {:ok, %File.Stat{inode: inode}} <- File.stat(absolute_fs_cgroup_path) do
+      inode
     else
       _ -> nil
     end
@@ -190,9 +204,24 @@ defmodule SpandexDatadog.ApiServer do
     :ok
   end
 
-  def send_and_log(traces, %{container_id: container_id, verbose?: verbose?} = state) do
+  def send_and_log(traces, %{container_id: container_id, cgroup_inode: cgroup_inode, verbose?: verbose?} = state) do
     headers = @headers ++ [{"X-Datadog-Trace-Count", length(traces)}]
-    headers = headers ++ List.wrap(if container_id, do: {"Datadog-Container-ID", container_id})
+
+    headers =
+      headers ++
+        cond do
+          container_id ->
+            [
+              {"Datadog-Container-ID", container_id},
+              {"Datadog-Entity-ID", "ci-#{container_id}"}
+            ]
+
+          cgroup_inode ->
+            [{"Datadog-Entity-ID", "in-#{cgroup_inode}"}]
+
+          true ->
+            []
+        end
 
     response =
       traces
