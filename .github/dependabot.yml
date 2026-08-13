@@ -1,0 +1,28 @@
+version: 2
+registries:
+  hex-fresha:
+    type: hex-organization
+    organization: fresha
+    key: ${{secrets.GH_FRESHAENGINEERING_HEX_PM_API_KEY}}
+updates:
+  - package-ecosystem: "mix"
+    directory: "/"
+    registries:
+      - hex-fresha
+    # mix.exs is executed as code during resolution; Dependabot denies external
+    # code execution by default once registries are configured, so this is
+    # required for mix updates to run at all.
+    insecure-external-code-execution: allow
+    schedule:
+      interval: "weekly"
+    # Hold newly published versions back for 7 days before proposing them,
+    # giving scanners time to catch a malicious release.
+    cooldown:
+      default-days: 7
+    groups:
+      elixir-patch-minor:
+        patterns: ["*"]
+        update-types: ["patch", "minor"]
+      elixir-major:
+        patterns: ["*"]
+        update-types: ["major"]
